@@ -1,0 +1,64 @@
+[project]
+name = "cscs-storage-sync"
+version = "0.1.0"
+description = "Infrastructure agent that synchronizes Waldur storage resources to physical filesystems."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "OpenNode team", email = "info@opennodecloud.com" }
+]
+keywords = ["hpc", "storage", "waldur", "sync"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: System :: Filesystems",
+]
+
+# Core runtime dependencies
+dependencies = [
+    "requests>=2.31.0",
+    "pydantic>=2.5.0",
+    "pyyaml>=6.0.1",
+    "tenacity>=8.2.3",  # Recommended for robust API retries
+]
+
+[project.scripts]
+# Creates a 'cscs-sync' executable command
+cscs-sync = "src.main:run_sync_loop"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# ------------------------------------------------------------------
+# UV Configuration
+# ------------------------------------------------------------------
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0",
+    "ruff>=0.1.0",      # Fast linting/formatting
+    "mypy>=1.7.0",      # Static type checking
+    "types-requests",
+    "types-PyYAML",
+]
+
+# ------------------------------------------------------------------
+# Tool Configurations
+# ------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]  # Pycodestyle, Pyflakes, Isort, Bugbear
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

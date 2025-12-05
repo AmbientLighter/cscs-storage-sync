@@ -1,0 +1,20 @@
+# Proxy Connection
+proxy_url: "http://waldur-storage-proxy:8080/api/storage-resources/"
+# Token for Keycloak/OIDC authentication (Service Account)
+api_token: "eyJh...<redacted>" 
+
+# Infrastructure Settings
+storage_root: "/mnt/lustre"     # Root where 'capstor', 'vast' dirs exist
+dry_run: false                  # If true, logs commands without running them
+sync_interval_seconds: 60       # Polling frequency
+
+# Storage System Mappings 
+# Maps Proxy 'storageSystem.key' to local directory names
+system_mappings:
+  capstor: "capstor"
+  vast: "vast"
+  iopsstor: "iopsstor"
+
+# Safety
+min_gid_allowed: 1000           # Prevent touching system GIDs
+archive_dir: "/mnt/lustre/.trash" # Where to move deleted resources
