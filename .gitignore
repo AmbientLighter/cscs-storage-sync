@@ -1,0 +1,56 @@
+# --- Python General ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Distribution / Build ---
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+MANIFEST
+
+# --- Virtual Environments (uv defaults to .venv) ---
+.venv
+venv/
+env/
+ENV/
+
+# --- Dependency Management ---
+# uv.lock IS committed to ensure reproducible builds
+# pip-wheel-metadata/
+
+# --- Tooling / Caches ---
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ruff
+.ruff_cache/
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Project Specific ---
+# Critical: Contains API tokens/secrets
+config.yaml
+
+# Logs
+*.log
+
+# OS Generated
+.DS_Store
+Thumbs.db
