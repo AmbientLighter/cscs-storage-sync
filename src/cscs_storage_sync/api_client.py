@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 import requests
 
@@ -12,16 +13,17 @@ class StorageProxyClient:
         self.base_url = base_url
         self.headers = {
             "Authorization": f"Token {token}",
-            "User-Agent": "CSCS-Infrastructure-Agent/1.0",
+            "User-Agent": "CSCS-Storage-Sync/0.1.0",
+            "Content-Type": "application/json",
         }
 
-    def fetch_all_resources(self, storage_system: str = None) -> list[StorageResource]:
-        """Iterates through all pages to fetch full state."""
-        results = []
+    def fetch_all_resources(self, storage_system: str = None) -> List[StorageResource]:
+        all_resources = []
         page = 1
+        page_size = 100
 
         while True:
-            params = {"page": page, "page_size": 100}
+            params = {"page": page, "page_size": page_size}
             if storage_system:
                 params["storage_system"] = storage_system
 
@@ -30,36 +32,39 @@ class StorageProxyClient:
                 resp = requests.get(self.base_url, headers=self.headers, params=params)
                 resp.raise_for_status()
 
-                # Unwrap the "result" envelope specific to the Proxy's response format
                 data = resp.json()
-                if "result" in data:
-                    data = data["result"]
-
                 parsed = PaginatedResponse(**data)
-                results.extend(parsed.resources)
 
-                if len(results) >= parsed.paginate["total"]:
+                all_resources.extend(parsed.resources)
+
+                # Check pagination
+                if not parsed.pagination:
                     break
-                page += 1
 
+                total_items = parsed.pagination.total
+                if len(all_resources) >= total_items:
+                    break
+
+                if parsed.resources:
+                    page += 1
+                else:
+                    break
+
+            except requests.RequestException as e:
+                logger.error(f"API request failed: {e}")
+                break
             except Exception as e:
-                logger.error(f"Failed to fetch resources: {e}")
+                logger.error(f"Parsing error: {e}")
                 break
 
-        return results
+        return all_resources
 
     def send_callback(self, url: str):
-        """Triggers a lifecycle callback (e.g. set_state_done)."""
         if not url:
             return
-
         try:
-            logger.info(f"Sending callback to Waldur: {url}")
-            # Usually these are POST requests. The body might vary based on Waldur version,
-            # but often empty POST is sufficient for state transitions.
+            logger.info(f"Callback: {url}")
             resp = requests.post(url, headers=self.headers)
             resp.raise_for_status()
-            logger.info("Callback successful.")
         except Exception as e:
-            logger.error(f"Callback failed: {e}")
-            # Depending on policy, we might want to re-raise to retry later
+            logger.error(f"Failed to send callback: {e}")

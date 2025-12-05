@@ -119,3 +119,20 @@ We use `mypy` for static type analysis.
 ```bash
 uv run mypy src
 ```
+
+### Project Directory Structure
+
+```text
+cscs-storage-sync/
+├── config.yaml            # Configuration
+├── pyproject.toml         # Build & Dependency config
+├── README.md              # Documentation
+└── src/
+    └── cscs_storage_sync/
+        ├── __init__.py
+        ├── main.py        # Entry point
+        ├── api_client.py  # HTTP Client
+        ├── filesystem.py  # OS operations
+        ├── processors.py  # Business logic
+        └── models.py      # Pydantic data schemas
+```

@@ -1,43 +1,80 @@
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class QuotaItem(BaseModel):
-    type: str  # 'space' or 'inodes'
+    type: str
     quota: float
     unit: str
-    enforcementType: str  # 'soft' or 'hard'
+    enforcementType: str
 
 
 class TargetItem(BaseModel):
-    # Depending on targetType, fields vary.
-    # Projects use unixGid, Users use unixUid
-    unixGid: Optional[int] = None
-    unixUid: Optional[int] = None
+    itemId: str
     name: str
+    # 'key' is present in Tenant/Customer items
+    key: Optional[str] = None
+    # 'unixGid' is specific to Project items
+    unixGid: Optional[int] = None
+    # 'unixUid' is specific to User items
+    unixUid: Optional[int] = None
 
 
 class Target(BaseModel):
-    targetType: str  # 'project', 'user', 'tenant', 'customer'
+    targetType: str  # 'tenant', 'customer', 'project', 'user'
     targetItem: TargetItem
+
+
+class Permission(BaseModel):
+    permissionType: str
+    value: str
+
+
+class StorageEntity(BaseModel):
+    """Generic model for storageSystem, storageFileSystem, etc."""
+
+    itemId: str
+    key: str
+    name: str
+    active: bool
 
 
 class StorageResource(BaseModel):
     itemId: str
-    status: str  # 'pending', 'active', 'removing', 'removed'
-    mountPoint: Dict[str, str]  # e.g. {'default': '/capstor/store/...'}
-    quotas: Optional[List[QuotaItem]] = []
-    target: Target
-    storageSystem: Dict[str, str]
+    status: str  # 'pending', 'active', 'removing'
 
-    # Callback URLs provided by Waldur for state transitions
+    # Maps e.g. {"default": "/path/to/dir"}
+    mountPoint: Dict[str, str]
+
+    permission: Optional[Permission] = None
+    quotas: Optional[List[QuotaItem]] = None
+
+    target: Target
+
+    storageSystem: StorageEntity
+    storageFileSystem: StorageEntity
+    storageDataType: StorageEntity
+
+    parentItemId: Optional[str] = None
+
+    # Callback URLs (Optional, usually present on Project items)
     approve_by_provider_url: Optional[str] = None
-    set_state_executing_url: Optional[str] = None
     set_state_done_url: Optional[str] = None
     set_state_erred_url: Optional[str] = None
 
 
+class PaginationInfo(BaseModel):
+    current: int
+    limit: int
+    offset: int
+    pages: int
+    total: int
+    api_total: Optional[int] = None
+
+
 class PaginatedResponse(BaseModel):
-    resources: List[StorageResource]
-    paginate: Dict[str, int]
+    status: str
+    # matches "resources": [...]
+    resources: List[StorageResource] = Field(default_factory=list)
+    pagination: Optional[PaginationInfo] = None

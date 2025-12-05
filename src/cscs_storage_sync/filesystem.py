@@ -3,6 +3,9 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import List
+
+from .models import QuotaItem
 
 logger = logging.getLogger(__name__)
 
@@ -12,54 +15,64 @@ class FilesystemDriver:
         self.root_path = Path(root_path)
         self.dry_run = dry_run
 
-    def _run_cmd(self, cmd: list, check=True):
+    def _run_cmd(self, cmd: List[str], check=True):
+        cmd_str = " ".join(cmd)
         if self.dry_run:
-            logger.info(f"[DRY-RUN] Executing: {' '.join(cmd)}")
+            logger.info(f"[DRY-RUN] Executing: {cmd_str}")
             return
 
         try:
-            logger.debug(f"Executing: {' '.join(cmd)}")
+            logger.debug(f"Executing: {cmd_str}")
             subprocess.run(cmd, check=check, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
             logger.error(f"Command failed: {e.stderr}")
-            raise
+            if check:
+                raise
 
-    def ensure_directory(self, rel_path: str, gid: int, mode: str = "770"):
+    def ensure_directory(self, rel_path: str, gid: int, mode: str = "775"):
         """Creates directory, sets ownership and permissions."""
-        full_path = self.root_path / rel_path.lstrip("/")
+        # Remove leading slash to join correctly with root
+        clean_rel_path = rel_path.lstrip("/")
+        full_path = self.root_path / clean_rel_path
 
+        # 1. Create Directory
         if not full_path.exists():
             logger.info(f"Creating directory: {full_path}")
             if not self.dry_run:
                 full_path.mkdir(parents=True, exist_ok=True)
 
-        # Set Ownership (root:gid)
-        # Note: uid 0 is root. We strictly enforce GID from Waldur.
-        logger.info(f"Setting ownership root:{gid} on {full_path}")
-        if not self.dry_run:
-            os.chown(full_path, 0, gid)
+        # 2. Set Ownership (root:gid)
+        # 0 is root uid. gid comes from Waldur (or 0 for tenants)
+        current_stat = full_path.stat() if full_path.exists() else None
 
-        # Set Permissions
-        # Parse octal string "770" -> int
-        mode_int = int(mode, 8)
-        logger.info(f"Setting mode {mode} on {full_path}")
-        if not self.dry_run:
-            os.chmod(full_path, mode_int)
+        if not self.dry_run and current_stat:
+            if current_stat.st_gid != gid:
+                logger.info(f"Chowning {full_path} to 0:{gid}")
+                os.chown(full_path, 0, gid)
 
-    def set_lustre_quota(self, rel_path: str, gid: int, quotas: list):
+        # 3. Set Permissions
+        if mode:
+            mode_int = int(mode, 8)
+            if not self.dry_run and current_stat:
+                if (current_stat.st_mode & 0o777) != mode_int:
+                    logger.info(f"Chmoding {full_path} to {mode}")
+                    os.chmod(full_path, mode_int)
+
+    def set_lustre_quota(self, rel_path: str, gid: int, quotas: List[QuotaItem]):
         """Applies quotas using lfs setquota."""
-        # Defaults
+        if gid == 0:
+            logger.warning("Skipping quota application for GID 0 (root).")
+            return
+
         block_soft = 0
         block_hard = 0
         inode_soft = 0
         inode_hard = 0
 
-        # Parse the JSON quota list
         for q in quotas:
-            # Note: Input unit is usually 'tera' for space, we need kilobytes for lfs
             val = float(q.quota)
             if q.type == "space":
-                # Convert TB to KB (1024^3)
+                # Waldur sends TB, Lustre expects KB
                 kb_val = int(val * 1024 * 1024 * 1024)
                 if q.enforcementType == "soft":
                     block_soft = kb_val
@@ -89,23 +102,21 @@ class FilesystemDriver:
             str(full_path),
         ]
 
-        logger.info(f"Applying Quota on {full_path} for GID {gid}")
-        self._run_cmd(
-            cmd, check=False
-        )  # check=False to prevent crashing on transient Lustre errors
+        logger.info(f"Setting quota for GID {gid} on {full_path}")
+        self._run_cmd(cmd, check=False)
 
     def archive_directory(self, rel_path: str, archive_root: str):
-        """Moves a directory to the trash/archive location instead of rm -rf."""
+        """Moves a directory to the archive location."""
         full_path = self.root_path / rel_path.lstrip("/")
         if not full_path.exists():
-            logger.warning(f"Cannot archive {full_path}, does not exist.")
+            logger.warning(f"Directory {full_path} not found, skipping archive.")
             return
 
-        target_name = f"{full_path.name}_archived_{os.urandom(4).hex()}"
-        archive_path = Path(archive_root) / target_name
+        # Create unique archive name
+        archive_name = f"{full_path.name}_archived_{os.urandom(4).hex()}"
+        archive_dest = Path(archive_root) / archive_name
 
-        logger.info(f"Archiving {full_path} -> {archive_path}")
+        logger.info(f"Archiving {full_path} -> {archive_dest}")
         if not self.dry_run:
-            # Ensure archive root exists
             Path(archive_root).mkdir(parents=True, exist_ok=True)
-            shutil.move(str(full_path), str(archive_path))
+            shutil.move(str(full_path), str(archive_dest))

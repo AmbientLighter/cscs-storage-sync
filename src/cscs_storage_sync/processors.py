@@ -22,63 +22,73 @@ class ResourceProcessor:
                 self._handle_active(resource)
             elif resource.status == "removing":
                 self._handle_removing(resource)
+            elif resource.status == "removed":
+                # Already handled, just log
+                pass
         except Exception as e:
-            logger.error(f"Error processing resource {resource.itemId}: {e}")
+            logger.error(f"Error processing {resource.itemId}: {e}")
             if resource.set_state_erred_url:
                 self.client.send_callback(resource.set_state_erred_url)
 
-    def _validate_gid(self, resource: StorageResource) -> int:
-        if resource.target.targetType == "project":
-            gid = resource.target.targetItem.unixGid
-            if gid is None or gid < self.min_gid:
-                raise ValueError(f"Invalid GID: {gid}")
-            return gid
-        return 0
+    def _get_gid_and_mode(self, res: StorageResource):
+        """Determines valid GID and Mode for the resource."""
+        # Default mode from JSON or fallback
+        mode = res.permission.value if res.permission else "775"
+
+        # 1. Project Level (Has specific GID)
+        if res.target.targetType == "project":
+            gid = res.target.targetItem.unixGid
+            if gid is None:
+                logger.warning(f"Project resource {res.itemId} missing unixGid. Using 0.")
+                return 0, mode
+            if gid < self.min_gid:
+                logger.warning(f"GID {gid} below min_gid {self.min_gid}. Using 0.")
+                return 0, mode
+            return gid, mode
+
+        # 2. Tenant/Customer Level (Usually owned by root or system group)
+        # Based on example JSON, these have "775" but no unixGid.
+        return 0, mode
 
     def _handle_pending(self, res: StorageResource):
-        """Creation Flow"""
-        logger.info(f"PROVISIONING: {res.mountPoint['default']}")
+        path = res.mountPoint.get("default")
+        if not path:
+            logger.error(f"No mount point for {res.itemId}")
+            return
 
-        path = res.mountPoint["default"]
+        gid, mode = self._get_gid_and_mode(res)
 
-        # 1. Validate Target
-        gid = self._validate_gid(res)
+        logger.info(f"Provisioning {res.target.targetType}: {path} (gid: {gid})")
 
-        # 2. Create FS structures
-        self.fs.ensure_directory(path, gid)
+        # 1. Ensure Directory
+        self.fs.ensure_directory(path, gid, mode)
 
-        # 3. Apply Quotas
-        if res.quotas:
+        # 2. Apply Quota (Only if present and valid GID)
+        if res.quotas and gid > 0:
             self.fs.set_lustre_quota(path, gid, res.quotas)
 
-        # 4. Notify Waldur
-        # First approve by provider (if strictly following site agent flow)
+        # 3. Callbacks
         if res.approve_by_provider_url:
             self.client.send_callback(res.approve_by_provider_url)
-
-        # Then set state done
         if res.set_state_done_url:
             self.client.send_callback(res.set_state_done_url)
 
     def _handle_active(self, res: StorageResource):
-        """Update/Drift Check Flow"""
-        # Logic here can be optimized to only run if 'UPDATING' or periodically
-        path = res.mountPoint["default"]
-        gid = self._validate_gid(res)
+        path = res.mountPoint.get("default")
+        gid, mode = self._get_gid_and_mode(res)
 
-        # Re-apply quotas (Idempotent operation)
-        if res.quotas:
+        # Periodic enforcement
+        self.fs.ensure_directory(path, gid, mode)
+        if res.quotas and gid > 0:
             self.fs.set_lustre_quota(path, gid, res.quotas)
 
     def _handle_removing(self, res: StorageResource):
-        """Deletion Flow"""
-        logger.info(f"DEPROVISIONING: {res.mountPoint['default']}")
+        path = res.mountPoint.get("default")
+        if not path:
+            return
 
-        path = res.mountPoint["default"]
-
-        # 1. Archive Data
+        logger.info(f"Deprovisioning: {path}")
         self.fs.archive_directory(path, self.archive_dir)
 
-        # 2. Notify Waldur (using set_state_done to confirm termination)
         if res.set_state_done_url:
             self.client.send_callback(res.set_state_done_url)

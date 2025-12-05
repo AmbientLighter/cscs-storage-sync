@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 import yaml
@@ -7,7 +8,6 @@ from .api_client import StorageProxyClient
 from .filesystem import FilesystemDriver
 from .processors import ResourceProcessor
 
-# Setup Logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -15,6 +15,8 @@ logger = logging.getLogger("CSCS-Sync")
 
 
 def load_config(path="config.yaml"):
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Config file not found: {path}")
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -22,29 +24,30 @@ def load_config(path="config.yaml"):
 def run_sync_loop():
     config = load_config()
 
+    # Initialize components
     client = StorageProxyClient(config["proxy_url"], config["api_token"])
-    fs = FilesystemDriver(config["storage_root"], dry_run=config["dry_run"])
+    fs = FilesystemDriver(config["storage_root"], dry_run=config.get("dry_run", False))
     processor = ResourceProcessor(fs, client, config)
 
     interval = config.get("sync_interval_seconds", 60)
 
-    logger.info("Starting Sync Agent...")
+    logger.info("Starting CSCS Storage Sync Agent")
+    logger.info(f"Dry Run: {config.get('dry_run', False)}")
 
     while True:
         try:
-            logger.info("Starting polling cycle...")
-
+            logger.info("Polling proxy...")
             resources = client.fetch_all_resources()
-
-            logger.info(f"Retrieved {len(resources)} resources from Proxy.")
+            logger.info(f"Fetched {len(resources)} resources.")
 
             for res in resources:
                 processor.process(res)
 
-            logger.info("Cycle complete.")
-
+        except KeyboardInterrupt:
+            logger.info("Stopping...")
+            break
         except Exception as e:
-            logger.error(f"Critical error in sync loop: {e}", exc_info=True)
+            logger.error(f"Sync loop error: {e}", exc_info=True)
 
         time.sleep(interval)
 
