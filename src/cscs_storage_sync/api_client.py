@@ -11,7 +11,7 @@ class StorageProxyClient:
     def __init__(self, base_url: str, token: str):
         self.base_url = base_url
         self.headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Token {token}",
             "User-Agent": "CSCS-Infrastructure-Agent/1.0",
         }
 
