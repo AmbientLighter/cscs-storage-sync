@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 class FilesystemDriver:
-    def __init__(self, root_path: str, dry_run: bool = False):
+    def __init__(self, root_path: str, dry_run: bool = False, debug_mode: bool = False):
         self.root_path = Path(root_path)
         self.dry_run = dry_run
+        self.debug_mode = debug_mode
 
     def _run_cmd(self, cmd: List[str], check=True):
         cmd_str = " ".join(cmd)
@@ -45,7 +46,9 @@ class FilesystemDriver:
         # 0 is root uid. gid comes from Waldur (or 0 for tenants)
         current_stat = full_path.stat() if full_path.exists() else None
 
-        if not self.dry_run and current_stat:
+        if self.debug_mode:
+            logger.debug(f"Debug mode: Skipping chown for {full_path}")
+        elif not self.dry_run and current_stat:
             if current_stat.st_gid != gid:
                 logger.info(f"Chowning {full_path} to 0:{gid}")
                 os.chown(full_path, 0, gid)

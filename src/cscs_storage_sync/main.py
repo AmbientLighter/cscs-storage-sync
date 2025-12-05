@@ -26,13 +26,18 @@ def run_sync_loop():
 
     # Initialize components
     client = StorageProxyClient(config["proxy_url"], config["api_token"])
-    fs = FilesystemDriver(config["storage_root"], dry_run=config.get("dry_run", False))
+    fs = FilesystemDriver(
+        config["storage_root"],
+        dry_run=config.get("dry_run", False),
+        debug_mode=config.get("debug_mode", False),
+    )
     processor = ResourceProcessor(fs, client, config)
 
     interval = config.get("sync_interval_seconds", 60)
 
     logger.info("Starting CSCS Storage Sync Agent")
     logger.info(f"Dry Run: {config.get('dry_run', False)}")
+    logger.info(f"Debug Mode: {config.get('debug_mode', False)}")
 
     while True:
         try:
