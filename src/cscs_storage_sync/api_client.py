@@ -36,7 +36,7 @@ class StorageProxyClient:
                     data = data["result"]
 
                 parsed = PaginatedResponse(**data)
-                results.extend(parsed.storageResources)
+                results.extend(parsed.resources)
 
                 if len(results) >= parsed.paginate["total"]:
                     break

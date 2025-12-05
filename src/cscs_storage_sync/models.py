@@ -39,5 +39,5 @@ class StorageResource(BaseModel):
 
 
 class PaginatedResponse(BaseModel):
-    storageResources: List[StorageResource]
+    resources: List[StorageResource]
     paginate: Dict[str, int]
