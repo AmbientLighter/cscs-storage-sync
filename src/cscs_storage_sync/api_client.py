@@ -59,12 +59,12 @@ class StorageProxyClient:
 
         return all_resources
 
-    def send_callback(self, url: str):
+    def send_callback(self, url: str, data: dict = None):
         if not url:
             return
         try:
-            logger.info(f"Callback: {url}")
-            resp = requests.post(url, headers=self.headers)
+            logger.info(f"Callback: {url} | Data: {data}")
+            resp = requests.post(url, headers=self.headers, json=data)
             resp.raise_for_status()
         except Exception as e:
             logger.error(f"Failed to send callback: {e}")

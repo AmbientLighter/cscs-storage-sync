@@ -42,7 +42,7 @@ class StorageEntity(BaseModel):
 
 class StorageResource(BaseModel):
     itemId: str
-    status: str  # 'pending', 'active', 'removing'
+    status: str  # 'pending', 'active', 'removing', 'updating'
 
     # Maps e.g. {"default": "/path/to/dir"}
     mountPoint: Dict[str, str]
@@ -62,6 +62,7 @@ class StorageResource(BaseModel):
     approve_by_provider_url: Optional[str] = None
     set_state_done_url: Optional[str] = None
     set_state_erred_url: Optional[str] = None
+    update_resource_options_url: Optional[str] = None
 
 
 class PaginationInfo(BaseModel):

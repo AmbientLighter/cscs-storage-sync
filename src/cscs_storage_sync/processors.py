@@ -22,6 +22,8 @@ class ResourceProcessor:
                 self._handle_active(resource)
             elif resource.status == "removing":
                 self._handle_removing(resource)
+            elif resource.status == "updating":
+                self._handle_updating(resource)
             elif resource.status == "removed":
                 # Already handled, just log
                 pass
@@ -50,6 +52,25 @@ class ResourceProcessor:
         # Based on example JSON, these have "775" but no unixGid.
         return 0, mode
 
+    def _map_quotas_to_waldur(self, quotas: list) -> dict:
+        mapping = {}
+        for q in quotas:
+            key = None
+            if q.type == "space":
+                if q.enforcementType == "soft":
+                    key = "soft_quota_space"
+                elif q.enforcementType == "hard":
+                    key = "hard_quota_space"
+            elif q.type == "inodes":
+                if q.enforcementType == "soft":
+                    key = "soft_quota_inodes"
+                elif q.enforcementType == "hard":
+                    key = "hard_quota_inodes"
+
+            if key:
+                mapping[key] = q.quota
+        return mapping
+
     def _handle_pending(self, res: StorageResource):
         path = res.mountPoint.get("default")
         if not path:
@@ -71,6 +92,12 @@ class ResourceProcessor:
         if res.approve_by_provider_url:
             self.client.send_callback(res.approve_by_provider_url)
         if res.set_state_done_url:
+            # 1. Report quotas via special endpoint
+            if res.quotas and res.update_resource_options_url:
+                payload = {"options": self._map_quotas_to_waldur(res.quotas)}
+                self.client.send_callback(res.update_resource_options_url, data=payload)
+
+            # 2. Set state to done
             self.client.send_callback(res.set_state_done_url)
 
     def _handle_active(self, res: StorageResource):
@@ -91,4 +118,31 @@ class ResourceProcessor:
         self.fs.archive_directory(path, self.archive_dir)
 
         if res.set_state_done_url:
+            self.client.send_callback(res.set_state_done_url)
+
+    def _handle_updating(self, res: StorageResource):
+        # Similar to pending, we re-apply state and notify
+        path = res.mountPoint.get("default")
+        if not path:
+            logger.error(f"No mount point for {res.itemId}")
+            return
+
+        gid, mode = self._get_gid_and_mode(res)
+        logger.info(f"Updating {res.target.targetType}: {path} (gid: {gid})")
+
+        # 1. Ensure Directory (Updates permissions/ownership if needed)
+        self.fs.ensure_directory(path, gid, mode)
+
+        # 2. Apply Quota
+        if res.quotas and gid > 0:
+            self.fs.set_lustre_quota(path, gid, res.quotas)
+
+        # 3. Callbacks
+        if res.set_state_done_url:
+            # 1. Report quotas via special endpoint
+            if res.quotas and res.update_resource_options_url:
+                payload = {"options": self._map_quotas_to_waldur(res.quotas)}
+                self.client.send_callback(res.update_resource_options_url, data=payload)
+
+            # 2. Set state to done
             self.client.send_callback(res.set_state_done_url)
