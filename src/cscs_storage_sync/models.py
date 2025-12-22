@@ -58,11 +58,11 @@ class StorageResource(BaseModel):
 
     parentItemId: Optional[str] = None
 
-    # Callback URLs (Optional, usually present on Project items)
     approve_by_provider_url: Optional[str] = None
     set_state_done_url: Optional[str] = None
     set_state_erred_url: Optional[str] = None
     update_resource_options_url: Optional[str] = None
+    set_backend_id_url: Optional[str] = None
 
 
 class PaginationInfo(BaseModel):

@@ -93,6 +93,9 @@ class ResourceProcessor:
             # 2. Set state to done
             self.client.send_callback(res.set_state_done_url)
 
+        if res.set_backend_id_url:
+            self.client.send_callback(res.set_backend_id_url, data={"backend_id": path})
+
     def _handle_active(self, res: StorageResource):
         path = res.mountPoint.get("default")
         gid, mode = self._get_gid_and_mode(res)
