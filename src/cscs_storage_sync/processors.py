@@ -120,6 +120,10 @@ class ResourceProcessor:
         if not path:
             return
 
+        # 0. Acknowledge (Approve)
+        if res.approve_by_provider_url:
+            self.client.send_callback(res.approve_by_provider_url)
+
         logger.info(f"Deprovisioning: {path}")
         self.fs.archive_directory(path, self.archive_dir)
 
@@ -135,6 +139,10 @@ class ResourceProcessor:
 
         gid, mode = self._get_gid_and_mode(res)
         logger.info(f"Updating {res.target.targetType}: {path} (gid: {gid})")
+
+        # 0. Acknowledge (Approve)
+        if res.approve_by_provider_url:
+            self.client.send_callback(res.approve_by_provider_url)
 
         # 1. Ensure Directory (Updates permissions/ownership if needed)
         self.fs.ensure_directory(path, gid, mode)

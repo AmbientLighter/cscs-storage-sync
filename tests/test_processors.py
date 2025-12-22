@@ -71,6 +71,7 @@ class TestResourceProcessor(unittest.TestCase):
             quotas=[
                 QuotaItem(type="space", quota=200, unit="GB", enforcementType="hard"),
             ],
+            approve_by_provider_url="http://approve",
             update_resource_options_url="http://update_opts",
             set_state_done_url="http://done",
             storageSystem={"itemId": "s-1", "key": "sys", "name": "Sys", "active": True},
@@ -80,8 +81,36 @@ class TestResourceProcessor(unittest.TestCase):
 
         self.processor.process(resource)
 
+        # Check approve called first
+        calls = self.mock_client.send_callback.call_args_list
+        self.assertEqual(calls[0], call("http://approve"))
+
         self.mock_fs.ensure_directory.assert_called()
         self.mock_client.send_callback.assert_any_call(
             "http://update_opts", data={"options": {"hard_quota_space": 200}}
         )
+        self.mock_client.send_callback.assert_any_call("http://done")
+
+    def test_handle_removing(self):
+        resource = StorageResource(
+            itemId="res-1",
+            status="removing",
+            mountPoint={"default": "/mnt/test"},
+            target=Target(
+                targetType="project", targetItem=TargetItem(itemId="t-1", name="proj", unixGid=2000)
+            ),
+            approve_by_provider_url="http://approve",
+            set_state_done_url="http://done",
+            storageSystem={"itemId": "s-1", "key": "sys", "name": "Sys", "active": True},
+            storageFileSystem={"itemId": "fs-1", "key": "fs", "name": "FS", "active": True},
+            storageDataType={"itemId": "dt-1", "key": "dt", "name": "DT", "active": True},
+        )
+
+        self.processor.process(resource)
+
+        # Check approve called first
+        calls = self.mock_client.send_callback.call_args_list
+        self.assertEqual(calls[0], call("http://approve"))
+
+        self.mock_fs.archive_directory.assert_called_with("/mnt/test", "/tmp/archive")
         self.mock_client.send_callback.assert_any_call("http://done")
