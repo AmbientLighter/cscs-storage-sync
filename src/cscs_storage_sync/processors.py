@@ -2,7 +2,7 @@ import logging
 
 from .api_client import StorageProxyClient
 from .filesystem import FilesystemDriver
-from .models import StorageResource
+from .models import QuotaItem, StorageResource
 
 logger = logging.getLogger(__name__)
 
@@ -52,24 +52,17 @@ class ResourceProcessor:
         # Based on example JSON, these have "775" but no unixGid.
         return 0, mode
 
-    def _map_quotas_to_waldur(self, quotas: list) -> dict:
-        mapping = {}
-        for q in quotas:
-            key = None
-            if q.type == "space":
-                if q.enforcementType == "soft":
-                    key = "soft_quota_space"
-                elif q.enforcementType == "hard":
-                    key = "hard_quota_space"
-            elif q.type == "inodes":
-                if q.enforcementType == "soft":
-                    key = "soft_quota_inodes"
-                elif q.enforcementType == "hard":
-                    key = "hard_quota_inodes"
-
-            if key:
-                mapping[key] = q.quota
-        return mapping
+    def _map_quotas_to_waldur(self, quotas: list[QuotaItem]) -> dict:
+        key_map = {
+            ("space", "hard"): "hard_quota_space",
+            ("inodes", "soft"): "soft_quota_inodes",
+            ("inodes", "hard"): "hard_quota_inodes",
+        }
+        return {
+            key_map[(q.type, q.enforcementType)]: q.quota
+            for q in quotas
+            if (q.type, q.enforcementType) in key_map
+        }
 
     def _handle_pending(self, res: StorageResource):
         path = res.mountPoint.get("default")
