@@ -71,30 +71,40 @@ class ResourceProcessor:
             return
 
         gid, mode = self._get_gid_and_mode(res)
-
         logger.info(f"Provisioning {res.target.targetType}: {path} (gid: {gid})")
 
-        # 1. Ensure Directory
-        self.fs.ensure_directory(path, gid, mode)
-
-        # 2. Apply Quota (Only if present and valid GID)
-        if res.quotas and gid > 0:
-            self.fs.set_lustre_quota(path, gid, res.quotas)
-
-        # 3. Callbacks
+        # 0. Acknowledge Request (Approve)
+        # We approve *before* provisioning to signal we are working on it.
         if res.approve_by_provider_url:
             self.client.send_callback(res.approve_by_provider_url)
-        if res.set_state_done_url:
-            # 1. Report quotas via special endpoint
-            if res.quotas and res.update_resource_options_url:
-                payload = {"options": self._map_quotas_to_waldur(res.quotas)}
-                self.client.send_callback(res.update_resource_options_url, data=payload)
 
-            # 2. Set state to done
-            self.client.send_callback(res.set_state_done_url)
+        # 1. Ensure Directory
+        try:
+            self.fs.ensure_directory(path, gid, mode)
 
+            # 2. Apply Quota (Only if present and valid GID)
+            if res.quotas and gid > 0:
+                self.fs.set_lustre_quota(path, gid, res.quotas)
+        except Exception:
+            # If provisioning fails, we should ideally report error but for now just raise
+            # so the main loop logs it and we retry later.
+            raise
+
+        # 3. Report Quotas, Backend ID, and Finish
+        # We set backend_id and quotas before marking state as done.
+
+        # 3a. Report Quotas
+        if res.quotas and res.update_resource_options_url:
+            payload = {"options": self._map_quotas_to_waldur(res.quotas)}
+            self.client.send_callback(res.update_resource_options_url, data=payload)
+
+        # 3b. Set Backend ID
         if res.set_backend_id_url:
             self.client.send_callback(res.set_backend_id_url, data={"backend_id": path})
+
+        # 3c. Set State Done
+        if res.set_state_done_url:
+            self.client.send_callback(res.set_state_done_url)
 
     def _handle_active(self, res: StorageResource):
         path = res.mountPoint.get("default")

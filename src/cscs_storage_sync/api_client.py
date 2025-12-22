@@ -9,10 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 class StorageProxyClient:
-    def __init__(self, base_url: str, token: str):
+    def __init__(self, base_url: str, proxy_token: str, waldur_token: str):
         self.base_url = base_url
-        self.headers = {
-            "Authorization": f"Token {token}",
+        self.proxy_headers = {
+            "Authorization": f"Bearer {proxy_token}",
+            "User-Agent": "CSCS-Storage-Sync/0.1.0",
+            "Content-Type": "application/json",
+        }
+        self.waldur_headers = {
+            "Authorization": f"Token {waldur_token}",
             "User-Agent": "CSCS-Storage-Sync/0.1.0",
             "Content-Type": "application/json",
         }
@@ -29,7 +34,7 @@ class StorageProxyClient:
 
             try:
                 logger.debug(f"Fetching page {page}...")
-                resp = requests.get(self.base_url, headers=self.headers, params=params)
+                resp = requests.get(self.base_url, headers=self.proxy_headers, params=params)
                 resp.raise_for_status()
 
                 data = resp.json()
@@ -64,7 +69,7 @@ class StorageProxyClient:
             return
         try:
             logger.info(f"Callback: {url} | Data: {data}")
-            resp = requests.post(url, headers=self.headers, json=data)
+            resp = requests.post(url, headers=self.waldur_headers, json=data)
             resp.raise_for_status()
         except Exception as e:
             logger.error(f"Failed to send callback: {e}")

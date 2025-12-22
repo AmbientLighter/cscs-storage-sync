@@ -25,7 +25,11 @@ def run_sync_loop():
     config = load_config()
 
     # Initialize components
-    client = StorageProxyClient(config["proxy_url"], config["api_token"])
+    client = StorageProxyClient(
+        base_url=config["proxy_url"],
+        proxy_token=config["api_token"],
+        waldur_token=config["waldur_api_token"],
+    )
     fs = FilesystemDriver(
         config["storage_root"],
         dry_run=config.get("dry_run", False),
